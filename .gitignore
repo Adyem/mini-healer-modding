@@ -1,0 +1,23 @@
+# Keep this repository focused on mod source and notes.
+# Everything else in the game install is runtime data, binaries, or build output.
+*
+
+!.gitignore
+!/agents.md
+!/tmp/
+!/tmp/LesserHealCostMod/
+!/tmp/LesserHealCostMod/**/*.cs
+!/tmp/LesserHealCostMod/**/*.csproj
+!/tmp/LesserHealCostMod/NuGet.Config
+!/tmp/MiniHealerTestPlugin/
+!/tmp/MiniHealerTestPlugin/**/*.cs
+!/tmp/MiniHealerTestPlugin/**/*.csproj
+!/tmp/MiniHealerTestPlugin/NuGet.Config
+!/tmp/inspect_minihealer/
+!/tmp/inspect_minihealer/**/*.cs
+!/tmp/inspect_minihealer/**/*.csproj
+!/tmp/inspect_minihealer/NuGet.Config
+!/tmp/atlas_il.txt
+!/tmp/attr_il.txt
+!/tmp/desc_il.txt
+!/tmp/upgrade_il.txt
