@@ -2,8 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <OutputType>Library</OutputType>
-    <AssemblyName>MiniHealerTestPlugin</AssemblyName>
-    <RootNamespace>MiniHealerTestPlugin</RootNamespace>
+    <AssemblyName>MiniHealerImprovementMod</AssemblyName>
+    <RootNamespace>MiniHealerImprovementMod</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>

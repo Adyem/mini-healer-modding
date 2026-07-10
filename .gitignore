@@ -5,10 +5,10 @@
 !.gitignore
 !/agents.md
 !/tmp/
-!/tmp/LesserHealCostMod/
-!/tmp/LesserHealCostMod/**/*.cs
-!/tmp/LesserHealCostMod/**/*.csproj
-!/tmp/LesserHealCostMod/NuGet.Config
+!/tmp/MiniHealerImprovementMod/
+!/tmp/MiniHealerImprovementMod/**/*.cs
+!/tmp/MiniHealerImprovementMod/**/*.csproj
+!/tmp/MiniHealerImprovementMod/NuGet.Config
 !/tmp/MiniHealerTestPlugin/
 !/tmp/MiniHealerTestPlugin/**/*.cs
 !/tmp/MiniHealerTestPlugin/**/*.csproj

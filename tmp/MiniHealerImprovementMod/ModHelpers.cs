@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
-namespace MiniHealerTestPlugin
+namespace MiniHealerImprovementMod
 {
     internal sealed class ReferenceEqualityComparer : System.Collections.Generic.IEqualityComparer<object>
     {
@@ -157,7 +157,7 @@ namespace MiniHealerTestPlugin
             var subtypes = subtypeValue != null
                 ? string.Join(",", subtypeValue.Select(type => type.ToString()).ToArray())
                 : "<null>";
-            Debug.LogError($"[Mini Healer Lesser Heal Cost Mod] Item atlas refresh failed. slot={slot}, subtypes={subtypes}, error={exception}");
+            Debug.LogError($"[Mini Healer Improvement Mod] Item atlas refresh failed. slot={slot}, subtypes={subtypes}, error={exception}");
         }
     }
 }

@@ -10,10 +10,10 @@ using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace MiniHealerTestPlugin
+namespace MiniHealerImprovementMod
 {
-    [BepInPlugin("com.codex.minihealer.lesserhealcost", "Mini Healer Lesser Heal Cost Mod", "1.0.0")]
-    public sealed class LesserHealCostMod : BaseUnityPlugin
+    [BepInPlugin("com.codex.minihealer.improvements", "Mini Healer Improvement Mod", "1.0.0")]
+    public sealed class MiniHealerImprovementModPlugin : BaseUnityPlugin
     {
         private const float CostMultiplier = 0.85f;
         private const string TargetSkillName = "Lesser Heal";
@@ -29,8 +29,8 @@ namespace MiniHealerTestPlugin
         private void Awake()
         {
             LogSource = Logger;
-            Logger.LogInfo("Mini Healer injected balance/item mod loaded");
-            new Harmony("com.codex.minihealer.lesserhealcost").PatchAll();
+            Logger.LogInfo("Mini Healer improvement mod loaded");
+            new Harmony("com.codex.minihealer.improvements").PatchAll();
             SceneManager.sceneLoaded += OnSceneLoaded;
             StartCoroutine(ApplyWhenReady());
         }
@@ -62,7 +62,7 @@ namespace MiniHealerTestPlugin
                 yield return new WaitForSeconds(0.5f);
             }
 
-            Logger.LogWarning("Timed out waiting for all injected balance/item changes to attach.");
+            Logger.LogWarning("Timed out waiting for all Mini Healer improvement changes to attach.");
         }
 
         private bool TryPatchAllControllers()
@@ -160,7 +160,7 @@ namespace MiniHealerTestPlugin
     {
         private static void Postfix(Skill __instance, ref int __result)
         {
-            if (!LesserHealCostMod.IsTargetSkill(__instance))
+            if (!MiniHealerImprovementModPlugin.IsTargetSkill(__instance))
             {
                 return;
             }
@@ -174,14 +174,14 @@ namespace MiniHealerTestPlugin
     {
         private static void Postfix(Skill __instance, ref string __result)
         {
-            if (!LesserHealCostMod.IsTargetSkill(__instance) || string.IsNullOrEmpty(__result))
+            if (!MiniHealerImprovementModPlugin.IsTargetSkill(__instance) || string.IsNullOrEmpty(__result))
             {
                 return;
             }
 
             var reducedCost = Math.Max(1, __instance.getTotalManaCost(false, null));
             var replacement = $"{reducedCost} mana";
-            var updated = LesserHealCostMod.ManaCostRegex.Replace(__result, replacement);
+            var updated = MiniHealerImprovementModPlugin.ManaCostRegex.Replace(__result, replacement);
             if (!string.Equals(updated, __result, StringComparison.Ordinal))
             {
                 __result = updated;

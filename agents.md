@@ -400,14 +400,14 @@
 ### Working example
 
 - `Aegis Choir` was added by BepInEx/Harmony injection only.
-- The plugin entry point lives at `tmp\LesserHealCostMod\LesserHealCostMod.cs`.
-- Item-specific weapon logic lives in `tmp\LesserHealCostMod\AegisChoirMod.cs`.
-- Shared artifact and reflection helpers live in `tmp\LesserHealCostMod\ModHelpers.cs` and should be reused when adding another item.
-- Built plugin output is `BepInEx\plugins\MiniHealerTestPlugin.dll`.
-- Build command from `tmp\LesserHealCostMod`:
+- The plugin entry point lives at `tmp\MiniHealerImprovementMod\MiniHealerImprovementMod.cs`.
+- Item-specific weapon logic lives in `tmp\MiniHealerImprovementMod\AegisChoirMod.cs`.
+- Shared artifact and reflection helpers live in `tmp\MiniHealerImprovementMod\ModHelpers.cs` and should be reused when adding another item.
+- Built plugin output is `BepInEx\plugins\MiniHealerImprovementMod.dll`.
+- Build command from `tmp\MiniHealerImprovementMod`:
 
 ```powershell
-$env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'; $env:DOTNET_NOLOGO = '1'; dotnet build .\LesserHealCostMod.csproj -c Release -o ..\..\BepInEx\plugins
+$env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'; $env:DOTNET_NOLOGO = '1'; dotnet build .\MiniHealerImprovementMod.csproj -c Release -o ..\..\BepInEx\plugins
 ```
 
 ### Core pattern
