@@ -402,6 +402,7 @@
 - `Aegis Choir` was added by BepInEx/Harmony injection only.
 - The plugin entry point lives at `tmp\MiniHealerImprovementMod\MiniHealerImprovementMod.cs`.
 - Item-specific weapon logic lives in `tmp\MiniHealerImprovementMod\AegisChoirMod.cs`.
+- Shared artifact dispatch lives in `tmp\MiniHealerImprovementMod\CustomArtifactRegistry.cs`.
 - Shared artifact and reflection helpers live in `tmp\MiniHealerImprovementMod\ModHelpers.cs` and should be reused when adding another item.
 - Built plugin output is `BepInEx\plugins\MiniHealerImprovementMod.dll`.
 - Build command from `tmp\MiniHealerImprovementMod`:
@@ -415,16 +416,60 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 - Do not edit game assets or original assemblies.
 - Put reusable helper code in the shared helper file, not in each item file.
 - Keep each custom item in its own file so registration, loot, UI, stats, and custom effects stay grouped by item.
+- Do not add per-item Harmony patch classes for common artifact plumbing.
+- Register each new item through `CustomArtifactRegistry` instead.
 - Clone an existing artifact template instead of constructing a sparse `new Artifact`.
 - Prefer a template of the same slot/type:
   - for a staff, clone an existing `Artifact` where `SlotType == WEAPON` and `Type == STAFF`
   - fallback to another weapon only if no same-type template exists
 - Copy all non-delegate instance fields from the template, then override only the custom item fields.
+- Use `ModHelpers.ConfigureCustomArtifact(...)` with a `CustomArtifactSpec` for common identity, type, rarity, drop, crafting, atlas search, attribute pool, icon fallback, and save-cleanup setup.
+- New item files should usually define:
+  - a stable key constant
+  - one `ArtifactAttribute.AttriubteType[]` for base/cleanup stat types
+  - optional `CustomBaseAttributeSpec[]` for fixed native base stats
+  - one `CustomArtifactSpec` construction inside `Configure...`
+  - item-specific loot targeting and optional combat callbacks
 - Register the item by replacing the artifact collections copy-on-write:
   - `ArtifactsData.ArtifactList`
   - `ArtifactsData.Artifacts`
   - `ArtifactsData.artifactsMap`
 - Remove any old item with the same key before adding the new one, or repeated scene loads can duplicate entries.
+
+### Shared custom artifact registry
+
+- `CustomArtifactRegistry` owns the shared Harmony patch layer for custom artifacts.
+- New items should expose item-specific methods that the registry can call:
+  - `TryInject...`
+  - `TryInject...LootSource`
+  - `Add...ToDropTable`
+  - `TryGet...PurchaseMaterial`
+  - `Ensure...SaveAttributes`
+  - `Ensure...BaseAttributes`
+  - `Append...Description`
+  - `Refresh...AtlasInfo`
+- Most of those methods should now be thin wrappers around generic helpers:
+  - configuration: `ModHelpers.ConfigureCustomArtifact`
+  - save cleanup: `ModHelpers.TryEnsureSaveAttributes`
+  - fixed base stats: `ModHelpers.TryApplyFixedBaseAttributes`
+  - purchase material: `ModHelpers.TryGetCustomPurchaseMaterial`
+  - atlas subtitle: `ModHelpers.RefreshAtlasSubtitle`
+  - descriptions: `ModHelpers.AppendUniqueDescription`
+- Add the new item key to `CustomArtifactRegistry.IsCustomArtifact`.
+- Add the new item calls to the registry dispatch methods for injection, loot, purchase material, save cleanup, base attributes, descriptions, atlas refresh, and boss drop tables as needed.
+- The registry already patches:
+  - `LootTableManager.getBossSpecificDropTable`
+  - `ArtifactDataController.isArtifactUnlocked`
+  - `ItemAtlasUIManager.refreshArtifactInfoView`
+  - `ItemAtlasUIManager.getArtifactPurchaseMat`
+  - `LootTableManager.rollAttributesByLevel`
+  - `LootTableManager.rollAttributesModular`
+  - `ArtifactSaveInfo.upgradeRandomBaseAttribute`
+  - `AttributesManager.getArtifactBaseAttributes`
+  - `OtherGameDataController.getDescriptionByArtifact`
+  - `LevelDescriptionModalController.updateLootView`
+- Only add a new Harmony patch when the item needs a genuinely new game hook, such as a combat event that cannot be wired through an artifact delegate.
+- Keep item files focused on identity, template selection, drop targeting, base-stat ranges, save cleanup for that item's own attributes, tooltip text, and custom combat behavior.
 
 ### Required artifact fields
 
@@ -463,7 +508,7 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 - Missing search-map entries caused the staff section to fail loading while other weapon subtypes worked.
 - Do not put literal prose into `Artifact.specialDesc` unless it is verified to be accepted as literal text.
 - `specialDesc` is often localization/special-case driven; literal custom text caused tooltip error strings.
-- If the item should always be visible in the atlas, patch `ArtifactDataController.isArtifactUnlocked` for the new key only.
+- If the item should always be visible in the atlas, add the key to `CustomArtifactRegistry.IsCustomArtifact` instead of adding a new unlock patch.
 
 ### Tooltip field mapping
 
@@ -473,14 +518,31 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
   - `ExtraInfoText` is drop/crafting/acquisition information.
 - Do not write stats into `UniqueText`.
 - Do not overwrite `ExtraInfoText` unless intentionally replacing drop/crafting info.
-- Prefer patching `OtherGameDataController.getDescriptionByArtifact` to append custom effect text so atlas and crafting screens share the same description output.
-- For the custom proc text, append one line in a postfix when `artifact.Key` matches the custom item.
+- Prefer appending custom effect text through `CustomArtifactRegistry.AppendDescriptions`, which dispatches from the shared `OtherGameDataController.getDescriptionByArtifact` patch.
+- For the custom proc text, append one line only when `artifact.Key` matches the custom item.
+- Put tooltip/color formatting in shared helpers, not directly in item files:
+  - use `ModHelpers.ColorizeTerms(...)` for custom effect prose
+  - use `ModHelpers.FormatAtlasStats(...)` for custom atlas fallback stat bodies
+  - use `ModHelpers.FormatAttributeRangeLine(...)` when a single manually formatted stat line is needed
+  - use `ModHelpers.GetColorForAttribute(...)` and `ModHelpers.GetColorForTooltipText(...)` instead of hardcoded item-local colors
+- Current shared tooltip colors:
+  - heal power/healing: pink via `ModHelpers.HealPowerColor`
+  - lightning: yellow via `ModHelpers.LightningColor`
+  - shield: light blue via `ModHelpers.ShieldColor`
+  - health/HP: green via `ModHelpers.HealthColor`
+  - physical: light neutral via `ModHelpers.PhysicalColor`
+- Native base stats should still go through `AttributesManager.getTextByAttribute` when possible, because that preserves the game's own tooltip style. The generic custom color helpers are mainly for custom effect text and atlas fallback text when the native formatter fails.
 
 ### Native stats and upgrade support
 
 - Do not implement core stats only through `Artifact.OnAddCurrentBonus` or `OnGetBaseAttackDamage` if the item should show stats and support random base attribute upgrades.
 - The crafting UI and random base attribute upgrade flow use `AttributesManager.getArtifactBaseAttributes`.
-- Patch `AttributesManager.getArtifactBaseAttributes` for the custom item and return native `ArtifactAttribute` entries.
+- Use the shared `CustomArtifactRegistry.EnsureBaseAttributes` path for the custom item and return native `ArtifactAttribute` entries.
+- Define custom item base stats as `CustomBaseAttributeSpec` values when possible, then pass them to shared helpers:
+  - `ModHelpers.AddOrReplaceBaseAttributes(attributes, specs)` for fixed custom stats
+  - `ModHelpers.TryApplyFixedBaseAttributes(...)` for the common `artifact key -> replace base attributes -> cleanup old save rolls` path
+  - `ModHelpers.AddOrReplaceBaseAttribute(...)` only for a one-off stat or when a value is calculated dynamically
+  - keep item files focused on choosing ranges and labels, not constructing repeated `ArtifactAttribute` plumbing
 - For `Aegis Choir`, the working native attributes are:
   - `ArtifactAttribute.AttriubteType.INCREASE_HEALER_PHYSICAL_DAMAGE_FLAT`
   - `ArtifactAttribute.AttriubteType.INCREASE_ALL_HP_FLAT`
@@ -506,8 +568,9 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 - Old attempts used seeded `ArtifactSaveAttribute` entries with `AddedType.ROLL_BASE`.
 - That caused duplicated/cursed tooltip lines after native base attributes were added.
 - The working pattern removes custom seeded `ROLL` and `ROLL_BASE` entries for the custom base stat types.
+- Use `ModHelpers.RemoveSeededRollAttributes(attributes, customBaseAttributeTypes)` for this cleanup instead of repeating `RemoveAll(...)` in each item file.
 - `ArtifactSaveInfo.AttributeUpgrade` should be initialized before upgrade logic runs.
-- Patch `ArtifactSaveInfo.upgradeRandomBaseAttribute` prefix only to repair/initialize save-info state, not to add duplicate stat rows.
+- Use the shared `CustomArtifactRegistry.EnsureSaveAttributes` path to repair/initialize save-info state, not to add duplicate stat rows.
 
 ### Custom effects
 
@@ -525,22 +588,31 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 ### Reusable Helpers
 
 - Reuse `ModHelpers.GetFieldValue` and `ModHelpers.SetFieldValue` for reflection access in future item mods.
+- Reuse `CustomArtifactSpec` plus `ModHelpers.ConfigureCustomArtifact` for common item identity/configuration.
 - Reuse `ModHelpers.CopyArtifactTemplate` and `ModHelpers.ReplaceArtifactCollections` when cloning/registering custom artifacts.
 - Reuse `ModHelpers.AppendKeyCopy` when adding a custom item key to loot lists.
 - Reuse `ModHelpers.AddOrReplaceBaseAttribute` when building native base stats for upgrade support.
+- Prefer `CustomBaseAttributeSpec` plus `ModHelpers.AddOrReplaceBaseAttributes` for fixed base stats.
+- Prefer `ModHelpers.TryApplyFixedBaseAttributes` when the item simply replaces its base stats with fixed specs.
+- Reuse `ModHelpers.RemoveSeededRollAttributes` for old custom `ROLL` and `ROLL_BASE` save cleanup.
+- Prefer `ModHelpers.TryEnsureSaveAttributes` for the standard item-key guarded save cleanup wrappers.
+- Reuse `ModHelpers.TryGetCustomPurchaseMaterial` and `ModHelpers.RefreshAtlasSubtitle` for standard atlas/crafting plumbing.
+- Reuse `ModHelpers.AppendUniqueDescription` when adding custom effect text to artifact descriptions.
+- Reuse `ModHelpers.ColorizeTerms`, `ModHelpers.FormatAtlasStats`, and `ModHelpers.GetColorForAttribute` for tooltip and atlas text coloring.
 - Reuse `ModHelpers.SetTextField` and `ModHelpers.LogAtlasRefreshFailure` for UI patch plumbing.
+- Reuse `CustomArtifactRegistry` for common Harmony patch dispatch instead of adding duplicate patch classes per item.
 - Reuse `ReferenceEqualityComparer` when a patch needs identity-based tracking of object instances.
 - Keep new item files focused on the item itself and call into shared helpers for generic plumbing.
 
 ### Loot and crafting
 
-- Add the item to boss loot through data and/or drop-table patching:
+- Add the item to boss loot through data and/or registry drop-table dispatch:
   - copy-on-write append to guardian `DifficultyData.Loot`
   - copy-on-write append to guardian `Boss.depthLoot`
-  - optional postfix on `LootTableManager.getBossSpecificDropTable`
+  - add a call from `CustomArtifactRegistry.AddToBossSpecificDropTable`
 - For atlas crafting, set `PurchaseMat` and `PurchasePrice`.
 - The greater alchemy shard key found in code is `GR_ALCHEMY_SHARD`.
-- `ItemAtlasUIManager.getArtifactPurchaseMat` has special fallback logic for normal guardian/depth items, so patch it for the custom key if the item must use a specific material.
+- `ItemAtlasUIManager.getArtifactPurchaseMat` has special fallback logic for normal guardian/depth items, so handle custom materials through `CustomArtifactRegistry.TryGetPurchaseMaterial`.
 - Current `Aegis Choir` atlas crafting cost is `1` greater alchemy shard.
 
 ### Common failure modes

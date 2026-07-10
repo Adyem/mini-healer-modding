@@ -23,8 +23,8 @@ namespace MiniHealerImprovementMod
 
         private readonly HashSet<object> _patchedSkills = new HashSet<object>(ReferenceEqualityComparer.Instance);
         private bool _skillPatched;
-        private bool _artifactInjected;
-        private bool _lootInjected;
+        private bool _customArtifactsInjected;
+        private bool _customLootInjected;
 
         private void Awake()
         {
@@ -51,10 +51,10 @@ namespace MiniHealerImprovementMod
             while (Time.realtimeSinceStartup < deadline)
             {
                 _skillPatched = _skillPatched || TryPatchAllControllers();
-                _artifactInjected = AegisChoirMod.TryInjectAegisChoir();
-                _lootInjected = AegisChoirMod.TryInjectAegisChoirLootSource();
+                _customArtifactsInjected = CustomArtifactRegistry.TryInjectArtifacts();
+                _customLootInjected = CustomArtifactRegistry.TryInjectLootSources();
 
-                if (_skillPatched && _artifactInjected && _lootInjected)
+                if (_skillPatched && _customArtifactsInjected && _customLootInjected)
                 {
                     yield break;
                 }
