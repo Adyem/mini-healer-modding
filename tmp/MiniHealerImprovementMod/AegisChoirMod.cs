@@ -11,11 +11,10 @@ namespace MiniHealerImprovementMod
         internal const string AegisChoirKey = "CODEX_AEGIS_CHOIR";
         private const string AegisChoirShieldKey = "CODEX_AEGIS_CHOIR_SHIELD";
         private const int AegisChoirCraftCost = 1;
+        private const float AegisChoirGuardianDropWeight = 0.1f;
         private const string GreaterAlchemyShardFallbackKey = "GR_ALCHEMY_SHARD";
-        private const string AegisChoirEffectText = "Healer attacks grant a random living party member a stackable shield equal to 100 plus current heal power, capped at 80% of that member's maximum health, for 8 seconds. New applications add a stack and refresh the shield duration.";
+        private const string AegisChoirEffectText = "Healer attacks grant a random living party member a non-stackable shield equal to 100 plus current heal power for 8 seconds. Reapplying the shield refreshes its value, but not its duration.";
         private const float AegisChoirShieldDuration = 8f;
-        private const float AegisChoirShieldMaxHealthPercent = 0.8f;
-        private const int AegisChoirMaxShieldStacks = 999;
         private static readonly ArtifactAttribute.AttriubteType[] AegisChoirBaseAttributeTypes =
         {
             ArtifactAttribute.AttriubteType.INCREASE_HEALER_PHYSICAL_DAMAGE_FLAT,
@@ -88,8 +87,8 @@ namespace MiniHealerImprovementMod
                 Artifact.ArtifactCharacterType.HEALER_DEFENSIVE
             };
             artifact.HiddenItemLevel = 85;
-            artifact.DropRate = 1f;
-            artifact.weight = 1f;
+            artifact.DropRate = AegisChoirGuardianDropWeight;
+            artifact.weight = AegisChoirGuardianDropWeight;
             artifact.isEquippable = true;
             artifact.isMutateable = true;
             artifact.isAugmentable = true;
@@ -265,8 +264,26 @@ namespace MiniHealerImprovementMod
             table.lootDropItems.Add(new LootTableManager.ArtifactLootDropItem
             {
                 item = artifact,
-                probabilityWeight = Mathf.Max(1f, artifact.weight)
+                probabilityWeight = GetAegisChoirDropWeight(table, artifact)
             });
+        }
+
+        private static float GetAegisChoirDropWeight(LootTableManager.ArtifactLootDropTable table, Artifact artifact)
+        {
+            var similarGuardianWeaponWeights = table?.lootDropItems?
+                .Where(item => item?.item != null
+                    && item.item.Key != AegisChoirKey
+                    && item.item.SlotType == Artifact.ArtifactSlotType.WEAPON
+                    && item.probabilityWeight > 0f)
+                .Select(item => item.probabilityWeight)
+                .ToList();
+
+            if (similarGuardianWeaponWeights != null && similarGuardianWeaponWeights.Count > 0)
+            {
+                return Mathf.Max(0.01f, similarGuardianWeaponWeights.Average());
+            }
+
+            return Mathf.Max(0.01f, artifact?.weight ?? AegisChoirGuardianDropWeight);
         }
 
         private static string ResolveGreaterAlchemyShardKey()
@@ -327,7 +344,12 @@ namespace MiniHealerImprovementMod
             var shieldTarget = candidates[UnityEngine.Random.Range(0, candidates.Count)];
             var shieldAmount = GetAegisChoirShieldAmount(shieldTarget, battleManager);
             var icon = artifact?.Icon;
-            RefreshAegisChoirShieldDuration(shieldTarget);
+            if (RefreshAegisChoirShieldValue(shieldTarget, shieldAmount))
+            {
+                battleManager?.spawnArtifactVFX(artifact, shieldTarget);
+                return;
+            }
+
             var shieldEffect = UtilsManager.UTILM?.getGenericShieldEffect(
                 attacker,
                 shieldTarget,
@@ -337,7 +359,7 @@ namespace MiniHealerImprovementMod
                 AegisChoirShieldDuration,
                 shieldAmount,
                 new List<float>(),
-                true,
+                false,
                 false,
                 true);
 
@@ -354,34 +376,32 @@ namespace MiniHealerImprovementMod
 
         private static int GetAegisChoirShieldAmount(Character shieldTarget, BattleManager battleManager)
         {
-            var maxHealthValue = ModHelpers.GetFieldValue(shieldTarget, "maxHealth");
-            var maxHealth = maxHealthValue != null ? Convert.ToInt64(maxHealthValue) : 0L;
             var healPower = OtherGameDataController.getCurrentHealPower(battleManager);
-            var uncappedShieldAmount = Math.Max(1L, 100L + healPower);
-            var maxShieldAmount = Math.Max(1L, (long)Math.Round(maxHealth * AegisChoirShieldMaxHealthPercent, MidpointRounding.AwayFromZero));
-            var shieldAmount = Math.Min(uncappedShieldAmount, maxShieldAmount);
+            var shieldAmount = Math.Max(1L, 100L + healPower);
             return shieldAmount > int.MaxValue ? int.MaxValue : (int)shieldAmount;
         }
 
-        private static void RefreshAegisChoirShieldDuration(Character shieldTarget)
+        private static bool RefreshAegisChoirShieldValue(Character shieldTarget, int shieldAmount)
         {
             var existingEffect = shieldTarget?.getEffectByKey(AegisChoirShieldKey);
             if (existingEffect == null)
             {
-                return;
+                return false;
             }
 
-            existingEffect.maxDuration = AegisChoirShieldDuration;
-            existingEffect.currentDuration = AegisChoirShieldDuration;
-            existingEffect.leftOverDuration = AegisChoirShieldDuration;
-            existingEffect.AppliedTime = DateTime.Now;
+            existingEffect.isStackable = false;
+            existingEffect.maxStackSize = 1;
+            existingEffect.currentStack = 1;
+            existingEffect.currentShieldValue = shieldAmount;
+            shieldTarget.setShielded(true, shieldAmount);
+            return true;
         }
 
         private static void ConfigureAegisChoirShieldEffect(EffectData shieldEffect, int shieldAmount)
         {
-            shieldEffect.isStackable = true;
-            shieldEffect.maxStackSize = AegisChoirMaxShieldStacks;
-            shieldEffect.currentStack = Math.Max(1, shieldEffect.currentStack);
+            shieldEffect.isStackable = false;
+            shieldEffect.maxStackSize = 1;
+            shieldEffect.currentStack = 1;
             shieldEffect.currentDuration = AegisChoirShieldDuration;
             shieldEffect.maxDuration = AegisChoirShieldDuration;
             shieldEffect.leftOverDuration = AegisChoirShieldDuration;
