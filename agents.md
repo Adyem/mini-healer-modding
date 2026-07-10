@@ -400,7 +400,9 @@
 ### Working example
 
 - `Aegis Choir` was added by BepInEx/Harmony injection only.
-- Current plugin source lives at `tmp\LesserHealCostMod\LesserHealCostMod.cs`.
+- The plugin entry point lives at `tmp\LesserHealCostMod\LesserHealCostMod.cs`.
+- Item-specific weapon logic lives in `tmp\LesserHealCostMod\AegisChoirMod.cs`.
+- Shared artifact and reflection helpers live in `tmp\LesserHealCostMod\ModHelpers.cs` and should be reused when adding another item.
 - Built plugin output is `BepInEx\plugins\MiniHealerTestPlugin.dll`.
 - Build command from `tmp\LesserHealCostMod`:
 
@@ -411,6 +413,8 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 ### Core pattern
 
 - Do not edit game assets or original assemblies.
+- Put reusable helper code in the shared helper file, not in each item file.
+- Keep each custom item in its own file so registration, loot, UI, stats, and custom effects stay grouped by item.
 - Clone an existing artifact template instead of constructing a sparse `new Artifact`.
 - Prefer a template of the same slot/type:
   - for a staff, clone an existing `Artifact` where `SlotType == WEAPON` and `Type == STAFF`
@@ -517,6 +521,16 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
   - non-null
   - not enemy
   - not dead
+
+### Reusable Helpers
+
+- Reuse `ModHelpers.GetFieldValue` and `ModHelpers.SetFieldValue` for reflection access in future item mods.
+- Reuse `ModHelpers.CopyArtifactTemplate` and `ModHelpers.ReplaceArtifactCollections` when cloning/registering custom artifacts.
+- Reuse `ModHelpers.AppendKeyCopy` when adding a custom item key to loot lists.
+- Reuse `ModHelpers.AddOrReplaceBaseAttribute` when building native base stats for upgrade support.
+- Reuse `ModHelpers.SetTextField` and `ModHelpers.LogAtlasRefreshFailure` for UI patch plumbing.
+- Reuse `ReferenceEqualityComparer` when a patch needs identity-based tracking of object instances.
+- Keep new item files focused on the item itself and call into shared helpers for generic plumbing.
 
 ### Loot and crafting
 
