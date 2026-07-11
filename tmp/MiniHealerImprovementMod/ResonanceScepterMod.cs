@@ -37,7 +37,6 @@ namespace MiniHealerImprovementMod
 
         private static readonly Dictionary<Artifact, int> CastCounters = new Dictionary<Artifact, int>();
         private static readonly Dictionary<Artifact, float> LastPulseTimes = new Dictionary<Artifact, float>();
-        private static GuardianDropContext _guardianContext;
 
         internal static bool TryInjectResonanceScepter()
         {
@@ -59,36 +58,18 @@ namespace MiniHealerImprovementMod
             }
 
             var context = GetGuardianContext(data);
-            if (data.artifactsMap != null && data.artifactsMap.TryGetValue(ResonanceScepterKey, out var existingArtifact) && existingArtifact != null)
-            {
-                ConfigureResonanceScepter(existingArtifact, controller, data, context);
-                WireResonanceScepter(existingArtifact);
-                return existingArtifact;
-            }
-
-            var artifact = CreateResonanceScepterArtifact(controller, data, context);
-            ModHelpers.ReplaceArtifactCollections(data, artifact);
-            return artifact;
-        }
-
-        private static Artifact CreateResonanceScepterArtifact(ArtifactDataController controller, ArtifactsData data, GuardianDropContext context)
-        {
-            var artifact = new Artifact();
-            var template = FindResonanceTemplate(data, context);
-            if (template != null)
-            {
-                ModHelpers.CopyArtifactTemplate(template, artifact);
-            }
-
-            ConfigureResonanceScepter(artifact, controller, data, context);
-            WireResonanceScepter(artifact);
-            return artifact;
+            return ModHelpers.EnsureCustomArtifact(
+                data,
+                ResonanceScepterKey,
+                templateData => FindResonanceTemplate(templateData, context),
+                artifact => ConfigureResonanceScepter(artifact, controller, data, context),
+                WireResonanceScepter);
         }
 
         private static Artifact FindResonanceTemplate(ArtifactsData data, GuardianDropContext context)
         {
-            return context?.Weapons?.FirstOrDefault(item => item != null && item.Type == Artifact.ArtifactType.STAFF)
-                ?? context?.Weapons?.FirstOrDefault(item => item != null && item.SlotType == Artifact.ArtifactSlotType.WEAPON)
+            return context?.Artifacts?.FirstOrDefault(item => item != null && item.Type == Artifact.ArtifactType.STAFF)
+                ?? context?.Artifacts?.FirstOrDefault(item => item != null && item.SlotType == Artifact.ArtifactSlotType.WEAPON)
                 ?? data.Artifacts?.FirstOrDefault(item => item != null && item.Key != ResonanceScepterKey && item.SlotType == Artifact.ArtifactSlotType.WEAPON && item.Type == Artifact.ArtifactType.STAFF)
                 ?? data.ArtifactList?.FirstOrDefault(item => item != null && item.Key != ResonanceScepterKey && item.SlotType == Artifact.ArtifactSlotType.WEAPON)
                 ?? data.Artifacts?.FirstOrDefault(item => item != null && item.Key != ResonanceScepterKey);
@@ -146,81 +127,13 @@ namespace MiniHealerImprovementMod
 
         private static void AddBalancedBaseAttribute(List<ArtifactAttribute> attributes, ArtifactAttribute.AttriubteType attributeType, float fallbackMin, float fallbackMax)
         {
-            var range = GetGuardianAttributeRange(attributeType, fallbackMin, fallbackMax);
+            var range = ModHelpers.GetGuardianAttributeRange(
+                GetGuardianContext(ArtifactDataController.ADM?.artifactData),
+                attributeType,
+                fallbackMin,
+                fallbackMax,
+                name => name.Contains("_PERCENT") || name.Contains("CASTSPD") || name.Contains("ATT_SPD") || name.Contains("REGEN_PERCENT"));
             ModHelpers.AddOrReplaceBaseAttribute(attributes, attributeType, range.Min, range.Max);
-        }
-
-        private static AttributeRange GetGuardianAttributeRange(ArtifactAttribute.AttriubteType attributeType, float fallbackMin, float fallbackMax)
-        {
-            var context = GetGuardianContext(ArtifactDataController.ADM?.artifactData);
-            var exactMatches = GetGuardianBaseAttributes(context)
-                .Where(attribute => attribute.attributeType == attributeType)
-                .Select(GetAttributeRange)
-                .Where(range => range.IsValid)
-                .ToList();
-
-            if (exactMatches.Count > 0)
-            {
-                return AverageRange(exactMatches);
-            }
-
-            var desiredName = attributeType.ToString();
-            var isFlat = desiredName.EndsWith("_FLAT", StringComparison.Ordinal);
-            var isPercent = desiredName.Contains("_PERCENT") || desiredName.Contains("CASTSPD") || desiredName.Contains("ATT_SPD") || desiredName.Contains("REGEN_PERCENT");
-            var relatedRanges = GetGuardianBaseAttributes(context)
-                .Where(attribute =>
-                {
-                    var name = attribute.attributeType.ToString();
-                    return (isFlat && name.EndsWith("_FLAT", StringComparison.Ordinal))
-                        || (isPercent && (name.Contains("_PERCENT") || name.Contains("CASTSPD") || name.Contains("ATT_SPD") || name.Contains("REGEN_PERCENT")));
-                })
-                .Select(GetAttributeRange)
-                .Where(range => range.IsValid)
-                .ToList();
-
-            if (relatedRanges.Count > 0)
-            {
-                return AverageRange(relatedRanges);
-            }
-
-            return new AttributeRange(fallbackMin, fallbackMax);
-        }
-
-        private static IEnumerable<ArtifactAttribute> GetGuardianBaseAttributes(GuardianDropContext context)
-        {
-            if (context?.Weapons == null || AttributesManager.ATRM == null)
-            {
-                return Enumerable.Empty<ArtifactAttribute>();
-            }
-
-            var result = new List<ArtifactAttribute>();
-            foreach (var weapon in context.Weapons.Where(weapon => weapon != null && weapon.Key != ResonanceScepterKey && weapon.Key != AegisChoirMod.AegisChoirKey))
-            {
-                var baseAttributes = AttributesManager.ATRM.getArtifactBaseAttributes(weapon, null, true, false, false);
-                if (baseAttributes != null)
-                {
-                    result.AddRange(baseAttributes.Where(attribute => attribute != null));
-                }
-            }
-
-            return result;
-        }
-
-        private static AttributeRange GetAttributeRange(ArtifactAttribute attribute)
-        {
-            if (attribute == null)
-            {
-                return AttributeRange.Invalid;
-            }
-
-            var min = attribute.T3_MIN != 0f || attribute.T3_MAX != 0f ? attribute.T3_MIN : attribute.T1_MIN;
-            var max = attribute.T3_MIN != 0f || attribute.T3_MAX != 0f ? attribute.T3_MAX : attribute.T1_MAX;
-            return max > 0f && max >= min ? new AttributeRange(min, max) : AttributeRange.Invalid;
-        }
-
-        private static AttributeRange AverageRange(List<AttributeRange> ranges)
-        {
-            return new AttributeRange(ranges.Average(range => range.Min), ranges.Average(range => range.Max));
         }
 
         internal static void AppendResonanceDescription(Artifact artifact, ref List<string> descriptions)
@@ -301,72 +214,16 @@ namespace MiniHealerImprovementMod
 
         private static float GetGuardianDropWeight(GuardianDropContext context)
         {
-            var weights = context?.Weapons?
-                .Where(item => item != null && item.Key != ResonanceScepterKey && item.weight > 0f)
-                .Select(item => item.weight)
-                .ToList();
-
-            return weights != null && weights.Count > 0 ? Mathf.Max(0.01f, weights.Average()) : ResonanceFallbackDropWeight;
+            return ModHelpers.GetAverageDropWeight(context, new[] { ResonanceScepterKey, AegisChoirMod.AegisChoirKey }, ResonanceFallbackDropWeight);
         }
 
         private static GuardianDropContext GetGuardianContext(ArtifactsData data)
         {
-            if (_guardianContext != null || data?.artifactsMap == null)
-            {
-                return _guardianContext;
-            }
-
-            var levelData = LevelDataController.LDM?.levelData;
-            var bossData = BossDataController.BDM?.bossData;
-            if (levelData?.Levels == null || bossData?.Bosses == null)
-            {
-                return null;
-            }
-
-            foreach (var level in levelData.Levels.Where(level => level != null && level.isGuardian && level.Difficulties != null).OrderBy(level => level.Key))
-            {
-                foreach (var difficulty in level.Difficulties.Where(difficulty => difficulty?.Bosses != null))
-                {
-                    foreach (var bossKey in difficulty.Bosses.Where(key => !string.IsNullOrEmpty(key)))
-                    {
-                        var boss = bossData.Bosses.FirstOrDefault(candidate => candidate != null && candidate.Key == bossKey);
-                        if (boss == null)
-                        {
-                            continue;
-                        }
-
-                        var weapons = ResolveGuardianWeapons(data, difficulty.Loot, boss.depthLoot);
-                        if (weapons.Count == 0)
-                        {
-                            continue;
-                        }
-
-                        _guardianContext = new GuardianDropContext
-                        {
-                            Level = level,
-                            LevelDifficulty = difficulty,
-                            Boss = boss,
-                            Weapons = weapons
-                        };
-                        MiniHealerImprovementModPlugin.LogSource?.LogInfo($"Resonance Scepter matched guardian {boss.Key} with {weapons.Count} guardian weapon references for balance.");
-                        return _guardianContext;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        private static List<Artifact> ResolveGuardianWeapons(ArtifactsData data, params List<string>[] keyLists)
-        {
-            return keyLists
-                .Where(list => list != null)
-                .SelectMany(list => list)
-                .Where(key => !string.IsNullOrEmpty(key) && data.artifactsMap.TryGetValue(key, out var artifact) && artifact != null && artifact.SlotType == Artifact.ArtifactSlotType.WEAPON)
-                .Select(key => data.artifactsMap[key])
-                .GroupBy(artifact => artifact.Key)
-                .Select(group => group.First())
-                .ToList();
+            return ModHelpers.GetGuardianContext(
+                data,
+                Artifact.ArtifactSlotType.WEAPON,
+                new[] { ResonanceScepterKey, AegisChoirMod.AegisChoirKey },
+                "Resonance Scepter");
         }
 
         private static void WireResonanceScepter(Artifact artifact)
@@ -473,28 +330,6 @@ namespace MiniHealerImprovementMod
             target.AddOngoingEffect(shieldEffect, false);
         }
 
-        private sealed class GuardianDropContext
-        {
-            internal Level Level;
-            internal LevelDifficultyData LevelDifficulty;
-            internal Boss Boss;
-            internal List<Artifact> Weapons;
-        }
-
-        private struct AttributeRange
-        {
-            internal static readonly AttributeRange Invalid = new AttributeRange(float.NaN, float.NaN);
-
-            internal AttributeRange(float min, float max)
-            {
-                Min = min;
-                Max = max;
-            }
-
-            internal float Min { get; }
-            internal float Max { get; }
-            internal bool IsValid => !float.IsNaN(Min) && !float.IsNaN(Max) && Max >= Min;
-        }
     }
 
 }

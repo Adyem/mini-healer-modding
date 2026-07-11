@@ -633,3 +633,16 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 - Stats appear doubled:
   - the custom item kept cloned template base attributes and appended new ones
   - replace the base attribute list for the custom key instead
+
+### Unity runtime security issue
+
+- This install uses Unity `2018.4.36` on Windows with the Mono runtime.
+- Unity disclosed a critical/high-severity runtime security issue, tracked as `CVE-2025-59489`, affecting Unity applications built with affected 2017/2018-era runtimes and later versions.
+- The issue involves command-line argument injection that can cause Unity to load native or managed libraries from an unintended location. It may allow code execution or privilege escalation depending on the platform and attack conditions.
+- Mini Healer being single-player lowers its exposure because it does not operate as an online game server, but it does not remove the risk from malicious local files, untrusted mods, crafted launch paths, or malicious links/handlers.
+- Updating `Assembly-CSharp.dll`, BepInEx, or the mod does not fix the Unity runtime vulnerability.
+- The preferred fix is for the developer to rebuild the game with a Unity version containing the security fix and redistribute the build.
+- If the source project is unavailable, Unity provides the Unity Application Patcher for existing Windows builds, including older Unity 2017/2018 applications. Back up the install first, patch the native Unity runtime, test BepInEx afterward, and expect Steam file verification to potentially restore the original files.
+- Official references:
+  - `https://unity.com/security/sept-2025-01`
+  - `https://unity.com/security/sept-2025-01/remediation`

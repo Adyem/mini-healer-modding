@@ -47,30 +47,12 @@ namespace MiniHealerImprovementMod
                 return null;
             }
 
-            if (data.artifactsMap != null && data.artifactsMap.TryGetValue(AegisChoirKey, out var existingArtifact) && existingArtifact != null)
-            {
-                ConfigureAegisChoir(existingArtifact, controller, data);
-                WireAegisChoir(existingArtifact);
-                return existingArtifact;
-            }
-
-            var artifact = CreateAegisChoirArtifact(controller, data);
-            ModHelpers.ReplaceArtifactCollections(data, artifact);
-            return artifact;
-        }
-
-        private static Artifact CreateAegisChoirArtifact(ArtifactDataController controller, ArtifactsData data)
-        {
-            var artifact = new Artifact();
-            var template = FindAegisChoirTemplate(data);
-            if (template != null)
-            {
-                ModHelpers.CopyArtifactTemplate(template, artifact);
-            }
-
-            ConfigureAegisChoir(artifact, controller, data);
-            WireAegisChoir(artifact);
-            return artifact;
+            return ModHelpers.EnsureCustomArtifact(
+                data,
+                AegisChoirKey,
+                FindAegisChoirTemplate,
+                artifact => ConfigureAegisChoir(artifact, controller, data),
+                WireAegisChoir);
         }
 
         private static Artifact FindAegisChoirTemplate(ArtifactsData data)

@@ -11,7 +11,8 @@ namespace MiniHealerImprovementMod
             var aegisReady = AegisChoirMod.TryInjectAegisChoir();
             var resonanceReady = ResonanceScepterMod.TryInjectResonanceScepter();
             var stormheartReady = StormheartCarapaceMod.TryInjectStormheartCarapace();
-            return aegisReady && resonanceReady && stormheartReady;
+            var meteorQuillReady = MeteorQuillMod.TryInjectMeteorQuill();
+            return aegisReady && resonanceReady && stormheartReady && meteorQuillReady;
         }
 
         internal static bool TryInjectLootSources()
@@ -19,7 +20,8 @@ namespace MiniHealerImprovementMod
             var aegisReady = AegisChoirMod.TryInjectAegisChoirLootSource();
             var resonanceReady = ResonanceScepterMod.TryInjectResonanceScepterLootSource();
             var stormheartReady = StormheartCarapaceMod.TryInjectStormheartCarapaceLootSource();
-            return aegisReady && resonanceReady && stormheartReady;
+            var meteorQuillReady = MeteorQuillMod.TryInjectMeteorQuillLootSource();
+            return aegisReady && resonanceReady && stormheartReady && meteorQuillReady;
         }
 
         internal static void AddToBossSpecificDropTable(string bossKey, LootTableManager.ArtifactLootDropTable table)
@@ -27,6 +29,7 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.AddAegisChoirToDropTable(table);
             ResonanceScepterMod.AddResonanceToDropTable(bossKey, table);
             StormheartCarapaceMod.AddStormheartToDropTable(bossKey, table);
+            MeteorQuillMod.AddMeteorQuillToDropTable(bossKey, table);
         }
 
         internal static bool TryHandleArtifactUnlocked(Artifact artifact, ref bool result)
@@ -53,7 +56,12 @@ namespace MiniHealerImprovementMod
                 return false;
             }
 
-            return StormheartCarapaceMod.TryGetStormheartPurchaseMaterial(artifact, ref result);
+            if (!StormheartCarapaceMod.TryGetStormheartPurchaseMaterial(artifact, ref result))
+            {
+                return false;
+            }
+
+            return MeteorQuillMod.TryGetMeteorQuillPurchaseMaterial(artifact, ref result);
         }
 
         internal static void EnsureSaveAttributes(Artifact artifact, List<ArtifactSaveAttribute> attributes)
@@ -61,6 +69,7 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.EnsureAegisChoirSaveAttributes(artifact, attributes);
             ResonanceScepterMod.EnsureResonanceSaveAttributes(artifact, attributes);
             StormheartCarapaceMod.EnsureStormheartSaveAttributes(artifact, attributes);
+            MeteorQuillMod.EnsureMeteorQuillSaveAttributes(artifact, attributes);
         }
 
         internal static void EnsureSaveAttributes(ArtifactSaveInfo saveInfo)
@@ -68,6 +77,7 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.EnsureAegisChoirSaveAttributes(saveInfo);
             ResonanceScepterMod.EnsureResonanceSaveAttributes(saveInfo);
             StormheartCarapaceMod.EnsureStormheartSaveAttributes(saveInfo);
+            MeteorQuillMod.EnsureMeteorQuillSaveAttributes(saveInfo);
         }
 
         internal static void EnsureBaseAttributes(Artifact artifact, ArtifactSaveInfo saveInfo, ref List<ArtifactAttribute> attributes)
@@ -75,6 +85,7 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.EnsureAegisChoirBaseAttributes(artifact, saveInfo, ref attributes);
             ResonanceScepterMod.EnsureResonanceBaseAttributes(artifact, saveInfo, ref attributes);
             StormheartCarapaceMod.EnsureStormheartBaseAttributes(artifact, saveInfo, ref attributes);
+            MeteorQuillMod.EnsureMeteorQuillBaseAttributes(artifact, saveInfo, ref attributes);
         }
 
         internal static void AppendDescriptions(Artifact artifact, ref List<string> descriptions)
@@ -82,6 +93,7 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.AppendAegisChoirDescription(artifact, ref descriptions);
             ResonanceScepterMod.AppendResonanceDescription(artifact, ref descriptions);
             StormheartCarapaceMod.AppendStormheartDescription(artifact, ref descriptions);
+            MeteorQuillMod.AppendMeteorQuillDescription(artifact, ref descriptions);
         }
 
         internal static void RefreshAtlasInfo(ItemAtlasUIManager manager)
@@ -89,13 +101,15 @@ namespace MiniHealerImprovementMod
             AegisChoirMod.RefreshAegisChoirAtlasInfo(manager);
             ResonanceScepterMod.RefreshResonanceAtlasInfo(manager);
             StormheartCarapaceMod.RefreshStormheartAtlasInfo(manager);
+            MeteorQuillMod.RefreshMeteorQuillAtlasInfo(manager);
         }
 
         internal static bool IsCustomArtifact(Artifact artifact)
         {
             return artifact?.Key == AegisChoirMod.AegisChoirKey
                 || artifact?.Key == ResonanceScepterMod.ResonanceScepterKey
-                || artifact?.Key == StormheartCarapaceMod.StormheartCarapaceKey;
+                || artifact?.Key == StormheartCarapaceMod.StormheartCarapaceKey
+                || artifact?.Key == MeteorQuillMod.MeteorQuillKey;
         }
     }
 

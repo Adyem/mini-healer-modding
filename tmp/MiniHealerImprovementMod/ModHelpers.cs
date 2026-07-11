@@ -155,6 +155,181 @@ namespace MiniHealerImprovementMod
             }
         }
 
+        internal static Artifact EnsureCustomArtifact(
+            ArtifactsData data,
+            string key,
+            Func<ArtifactsData, Artifact> findTemplate,
+            Action<Artifact> configure,
+            Action<Artifact> wire)
+        {
+            if (data == null || string.IsNullOrEmpty(key))
+            {
+                return null;
+            }
+
+            if (data.artifactsMap != null
+                && data.artifactsMap.TryGetValue(key, out var existingArtifact)
+                && existingArtifact != null)
+            {
+                configure?.Invoke(existingArtifact);
+                wire?.Invoke(existingArtifact);
+                return existingArtifact;
+            }
+
+            var artifact = new Artifact();
+            var template = findTemplate?.Invoke(data);
+            if (template != null)
+            {
+                CopyArtifactTemplate(template, artifact);
+            }
+
+            configure?.Invoke(artifact);
+            wire?.Invoke(artifact);
+            ReplaceArtifactCollections(data, artifact);
+            return artifact;
+        }
+
+        internal static GuardianDropContext GetGuardianContext(
+            ArtifactsData data,
+            Artifact.ArtifactSlotType slotType,
+            IEnumerable<string> excludedKeys,
+            string logLabel)
+        {
+            if (data?.artifactsMap == null)
+            {
+                return null;
+            }
+
+            var excluded = new HashSet<string>(excludedKeys ?? Enumerable.Empty<string>());
+            var levelData = LevelDataController.LDM?.levelData;
+            var bossData = BossDataController.BDM?.bossData;
+            if (levelData?.Levels == null || bossData?.Bosses == null)
+            {
+                return null;
+            }
+
+            foreach (var level in levelData.Levels.Where(item => item != null && item.isGuardian && item.Difficulties != null).OrderBy(item => item.Key))
+            {
+                foreach (var difficulty in level.Difficulties.Where(item => item?.Bosses != null))
+                {
+                    foreach (var bossKey in difficulty.Bosses.Where(key => !string.IsNullOrEmpty(key)))
+                    {
+                        var boss = bossData.Bosses.FirstOrDefault(item => item != null && item.Key == bossKey);
+                        if (boss == null)
+                        {
+                            continue;
+                        }
+
+                        var artifacts = ResolveGuardianArtifacts(data, slotType, excluded, difficulty.Loot, boss.depthLoot);
+                        if (artifacts.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        var context = new GuardianDropContext
+                        {
+                            Level = level,
+                            LevelDifficulty = difficulty,
+                            Boss = boss,
+                            Artifacts = artifacts
+                        };
+                        MiniHealerImprovementModPlugin.LogSource?.LogInfo($"{logLabel} matched guardian {boss.Key} with {artifacts.Count} guardian {slotType.ToString().ToLowerInvariant()} references for balance.");
+                        return context;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        internal static List<Artifact> ResolveGuardianArtifacts(
+            ArtifactsData data,
+            Artifact.ArtifactSlotType slotType,
+            ISet<string> excludedKeys,
+            params List<string>[] keyLists)
+        {
+            return keyLists
+                .Where(list => list != null)
+                .SelectMany(list => list)
+                .Where(key => !string.IsNullOrEmpty(key)
+                    && !excludedKeys.Contains(key)
+                    && data.artifactsMap.TryGetValue(key, out var artifact)
+                    && artifact != null
+                    && artifact.SlotType == slotType)
+                .Select(key => data.artifactsMap[key])
+                .GroupBy(artifact => artifact.Key)
+                .Select(group => group.First())
+                .ToList();
+        }
+
+        internal static AttributeRange GetGuardianAttributeRange(
+            GuardianDropContext context,
+            ArtifactAttribute.AttriubteType attributeType,
+            float fallbackMin,
+            float fallbackMax,
+            Func<string, bool> relatedAttributeFilter)
+        {
+            var exactRanges = GetGuardianBaseAttributes(context)
+                .Where(attribute => attribute.attributeType == attributeType)
+                .Select(GetAttributeRange)
+                .Where(range => range.IsValid)
+                .ToList();
+            if (exactRanges.Count > 0)
+            {
+                return AverageRange(exactRanges);
+            }
+
+            var relatedRanges = GetGuardianBaseAttributes(context)
+                .Where(attribute => relatedAttributeFilter?.Invoke(attribute.attributeType.ToString()) == true)
+                .Select(GetAttributeRange)
+                .Where(range => range.IsValid)
+                .ToList();
+            return relatedRanges.Count > 0 ? AverageRange(relatedRanges) : new AttributeRange(fallbackMin, fallbackMax);
+        }
+
+        internal static IEnumerable<ArtifactAttribute> GetGuardianBaseAttributes(GuardianDropContext context)
+        {
+            if (context?.Artifacts == null || AttributesManager.ATRM == null)
+            {
+                return Enumerable.Empty<ArtifactAttribute>();
+            }
+
+            return context.Artifacts
+                .Where(artifact => artifact != null)
+                .SelectMany(artifact => AttributesManager.ATRM.getArtifactBaseAttributes(artifact, null, true, false, false) ?? new List<ArtifactAttribute>())
+                .Where(attribute => attribute != null);
+        }
+
+        internal static AttributeRange GetAttributeRange(ArtifactAttribute attribute)
+        {
+            if (attribute == null)
+            {
+                return AttributeRange.Invalid;
+            }
+
+            var min = attribute.T3_MIN != 0f || attribute.T3_MAX != 0f ? attribute.T3_MIN : attribute.T1_MIN;
+            var max = attribute.T3_MIN != 0f || attribute.T3_MAX != 0f ? attribute.T3_MAX : attribute.T1_MAX;
+            return max > 0f && max >= min ? new AttributeRange(min, max) : AttributeRange.Invalid;
+        }
+
+        internal static AttributeRange AverageRange(IEnumerable<AttributeRange> ranges)
+        {
+            var values = ranges?.ToList() ?? new List<AttributeRange>();
+            return values.Count == 0
+                ? AttributeRange.Invalid
+                : new AttributeRange(values.Average(range => range.Min), values.Average(range => range.Max));
+        }
+
+        internal static float GetAverageDropWeight(GuardianDropContext context, IEnumerable<string> excludedKeys, float fallback)
+        {
+            var excluded = new HashSet<string>(excludedKeys ?? Enumerable.Empty<string>());
+            var weights = context?.Artifacts?
+                .Where(artifact => artifact != null && !excluded.Contains(artifact.Key) && artifact.weight > 0f)
+                .Select(artifact => artifact.weight)
+                .ToList();
+            return weights != null && weights.Count > 0 ? Mathf.Max(0.01f, weights.Average()) : fallback;
+        }
+
         internal static void ReplaceArtifactCollections(ArtifactsData data, Artifact artifact)
         {
             if (data == null || artifact == null)
@@ -468,6 +643,29 @@ namespace MiniHealerImprovementMod
                 .ToLowerInvariant();
             return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name);
         }
+    }
+
+    internal sealed class GuardianDropContext
+    {
+        internal Level Level;
+        internal LevelDifficultyData LevelDifficulty;
+        internal Boss Boss;
+        internal List<Artifact> Artifacts;
+    }
+
+    internal struct AttributeRange
+    {
+        internal static readonly AttributeRange Invalid = new AttributeRange(float.NaN, float.NaN);
+
+        internal AttributeRange(float min, float max)
+        {
+            Min = min;
+            Max = max;
+        }
+
+        internal float Min { get; }
+        internal float Max { get; }
+        internal bool IsValid => !float.IsNaN(Min) && !float.IsNaN(Max) && Max >= Min;
     }
 
     internal readonly struct CustomBaseAttributeSpec
