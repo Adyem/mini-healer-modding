@@ -21,3 +21,6 @@
 !/tmp/attr_il.txt
 !/tmp/desc_il.txt
 !/tmp/upgrade_il.txt
+
+# Unity Application Patcher is licensed for internal use only; never commit it.
+/tmp/unity-patcher/
