@@ -637,6 +637,9 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
 ### Custom item icons
 
 - Custom item icons are generated raster assets based only on extracted Mini Healer item-icon sprites used as style references. Do not feed unrelated UI, effect, character, or scene assets to image generation.
+- The icon image must contain the item artwork only. Do not bake a black, colored, rarity, border, or other opaque background into the PNG; the game supplies the matching item/rarity background behind the transparent sprite.
+- Final icon PNGs must have an alpha channel with transparent corners and transparent pixels around the artwork. Validate the image before embedding it by checking that the corner alpha is `0` and that the alpha range includes both `0` and `255`.
+- If an image-generation pass produces a solid background, remove it with the local chroma-key helper before committing the asset. Preserve dark details in the artwork and inspect the resulting `32x32` sprite against a contrasting background.
 - Keep the final in-game icon at `32x32` pixels with nearest-neighbor scaling so it remains readable at the game's native icon size. The current source and final files are under `tmp\MiniHealerImprovementMod\GeneratedIcons\`.
 - Add the final `*_32.png` file to `MiniHealerImprovementMod.csproj` as an embedded resource:
   - `<EmbeddedResource Include="GeneratedIcons\MyItem_32.png" />`
