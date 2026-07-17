@@ -95,7 +95,7 @@ namespace MiniHealerImprovementMod
                 DroppedLevelName = !string.IsNullOrEmpty(context?.Level?.Key) ? context.Level.Key : "Guardian",
                 PurchaseMaterialFallbackKey = GreaterAlchemyShardFallbackKey,
                 PurchasePrice = ResonanceCraftCost,
-                FallbackIcon = controller.LifemenderIcon ?? controller.FaithkeeperIcon,
+                FallbackIcon = CustomArtifactIcons.Load("ResonanceScepter_32.png") ?? controller.LifemenderIcon ?? controller.FaithkeeperIcon,
                 BaseAttributeTypes = ResonanceBaseAttributeTypes,
                 SearchText = "Resonance Scepter staff healer pulse shield heal guardian legendary"
             });

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using UnityEngine;
 
 namespace MiniHealerImprovementMod
@@ -14,23 +15,26 @@ namespace MiniHealerImprovementMod
         private const int EmpoweredShotCount = 5;
         private const float EmpoweredShotBonus = 0.5f;
 
-        private static readonly ArtifactAttribute.AttriubteType[] MeteorQuillBaseAttributeTypes =
-        {
-            ArtifactAttribute.AttriubteType.INCREASE_RANGER_DAMAGE_FLAT,
-            ArtifactAttribute.AttriubteType.INCREASE_RANGER_CRIT_CHANCE,
-            ArtifactAttribute.AttriubteType.INCREASE_RAPID_SHOT_DAMAGE,
-            ArtifactAttribute.AttriubteType.INCREASE_ALL_HP_FLAT
-        };
-
         private static readonly CustomBaseAttributeSpec[] MeteorQuillBaseAttributeSpecs =
         {
-            new CustomBaseAttributeSpec(ArtifactAttribute.AttriubteType.INCREASE_RANGER_DAMAGE_FLAT, 400f, 4500f, "Ranger Damage"),
+            new CustomBaseAttributeSpec(ArtifactAttribute.AttriubteType.INCREASE_RANGER_DAMAGE_FLAT, 400f, 450f, "Ranger Damage"),
             new CustomBaseAttributeSpec(ArtifactAttribute.AttriubteType.INCREASE_RANGER_CRIT_CHANCE, 7f, 9f, "Ranger Crit Chance"),
             new CustomBaseAttributeSpec(ArtifactAttribute.AttriubteType.INCREASE_RAPID_SHOT_DAMAGE, 2000f, 2250f, "Rapid Shot Damage"),
             new CustomBaseAttributeSpec(ArtifactAttribute.AttriubteType.INCREASE_ALL_HP_FLAT, 3000f, 3500f, "Party Health")
         };
 
-        private static readonly Dictionary<Artifact, int> AttackCounters = new Dictionary<Artifact, int>();
+        private static readonly ArtifactAttribute.AttriubteType[] MeteorQuillBaseAttributeTypes =
+            MeteorQuillBaseAttributeSpecs.Select(spec => spec.AttributeType).ToArray();
+
+        private sealed class BattleAttackState
+        {
+            internal int AttackCount;
+            internal bool Empowered;
+            internal int RemainingElementCallbacks;
+        }
+
+        private static readonly Dictionary<BattleManager, BattleAttackState> BattleAttackStates =
+            new Dictionary<BattleManager, BattleAttackState>();
 
         internal static bool TryInjectMeteorQuill()
         {
@@ -98,7 +102,7 @@ namespace MiniHealerImprovementMod
                 DroppedLevelName = !string.IsNullOrEmpty(context?.Level?.Key) ? context.Level.Key : "Guardian",
                 PurchaseMaterialFallbackKey = GreaterAlchemyShardFallbackKey,
                 PurchasePrice = MeteorQuillCraftCost,
-                FallbackIcon = controller.LifemenderIcon ?? controller.FaithkeeperIcon,
+                FallbackIcon = CustomArtifactIcons.Load("MeteorQuill_32.png") ?? controller.LifemenderIcon ?? controller.FaithkeeperIcon,
                 BaseAttributeTypes = MeteorQuillBaseAttributeTypes,
                 SearchText = "Meteor Quill arrow ranger rapid shot crit endgame legendary"
             });
@@ -127,10 +131,10 @@ namespace MiniHealerImprovementMod
             }
 
             ModHelpers.AppendUniqueDescription(ref descriptions, ModHelpers.ColorizeTerms(
-                "Every 5th living ranger attack becomes a meteor shot, dealing 50% bonus damage. The counter is shared across the ranger party.",
+                "Every 5th successful living ranger auto-attack is empowered, dealing 50% bonus base damage. The counter is shared across the ranger party and resets each battle.",
                 new TooltipTerm("5th", ModHelpers.LightningColor),
-                new TooltipTerm("meteor shot", ModHelpers.LightningColor),
-                new TooltipTerm("50% bonus damage", ModHelpers.PhysicalColor)));
+                new TooltipTerm("empowered", ModHelpers.LightningColor),
+                new TooltipTerm("50% bonus base damage", ModHelpers.PhysicalColor)));
         }
 
         internal static bool TryGetMeteorQuillPurchaseMaterial(Artifact artifact, ref StackableMaterial result)
@@ -177,16 +181,59 @@ namespace MiniHealerImprovementMod
                 return damage;
             }
 
-            AttackCounters.TryGetValue(artifact, out var attacks);
-            attacks = (attacks % EmpoweredShotCount) + 1;
-            AttackCounters[artifact] = attacks;
-            if (attacks != EmpoweredShotCount)
+            if (battleManager == null || !BattleAttackStates.TryGetValue(battleManager, out var state))
+            {
+                return damage;
+            }
+
+            var empowered = state.Empowered;
+            state.RemainingElementCallbacks--;
+            if (state.RemainingElementCallbacks <= 0)
+            {
+                state.Empowered = false;
+            }
+
+            if (!empowered)
             {
                 return damage;
             }
 
             var bonus = Math.Max(0L, (long)Math.Round(Math.Max(0, damage) * EmpoweredShotBonus, MidpointRounding.AwayFromZero));
             return (int)Math.Min(int.MaxValue, Math.Max(0L, damage) + bonus);
+        }
+
+        internal static void BeginAutoAttack(Character attacker, List<DamageData> damageData)
+        {
+            if (attacker == null || attacker.isEnemy || attacker.isDead
+                || attacker.characterType != OtherGameDataController.CharacterType.Ranger
+                || damageData == null || damageData.Count == 0)
+            {
+                return;
+            }
+
+            var battleManager = ModHelpers.GetFieldValue(attacker, "BattleManager") as BattleManager;
+            if (battleManager == null)
+            {
+                return;
+            }
+
+            if (!BattleAttackStates.TryGetValue(battleManager, out var state))
+            {
+                state = new BattleAttackState();
+                BattleAttackStates[battleManager] = state;
+            }
+
+            state.AttackCount = (state.AttackCount % EmpoweredShotCount) + 1;
+            state.Empowered = state.AttackCount == EmpoweredShotCount;
+            state.RemainingElementCallbacks = Enum.GetValues(typeof(DamageData.DamageElement)).Length;
+        }
+
+        internal static void ResetBattleState(BattleManager battleManager)
+        {
+            if (battleManager != null)
+            {
+                BattleAttackStates.Remove(battleManager);
+            }
         }
 
         private static GuardianDropContext GetGuardianContext(ArtifactsData data = null)
@@ -201,6 +248,60 @@ namespace MiniHealerImprovementMod
         private static float GetGuardianDropWeight(GuardianDropContext context)
         {
             return ModHelpers.GetAverageDropWeight(context, new[] { MeteorQuillKey }, MeteorQuillFallbackDropWeight);
+        }
+    }
+
+    [HarmonyPatch(typeof(Character), nameof(Character.autoAttackDamage))]
+    internal static class Character_AutoAttackDamage_MeteorQuill_Patch
+    {
+        private static void Prefix(Character __instance, List<DamageData> damageDatas)
+        {
+            MeteorQuillMod.BeginAutoAttack(__instance, damageDatas);
+        }
+    }
+
+    [HarmonyPatch(typeof(BattleManager), "Awake")]
+    internal static class BattleManager_Awake_MeteorQuill_Patch
+    {
+        private static void Prefix(BattleManager __instance)
+        {
+            MeteorQuillMod.ResetBattleState(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.startEngageAnimation))]
+    internal static class BattleManager_StartEngageAnimation_MeteorQuill_Patch
+    {
+        private static void Prefix(BattleManager __instance)
+        {
+            MeteorQuillMod.ResetBattleState(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.allBossesDefeated))]
+    internal static class BattleManager_AllBossesDefeated_MeteorQuill_Patch
+    {
+        private static void Prefix(BattleManager __instance)
+        {
+            MeteorQuillMod.ResetBattleState(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.allPlayerDied))]
+    internal static class BattleManager_AllPlayerDied_MeteorQuill_Patch
+    {
+        private static void Prefix(BattleManager __instance)
+        {
+            MeteorQuillMod.ResetBattleState(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(BattleManager), nameof(BattleManager.stopAllActions))]
+    internal static class BattleManager_StopAllActions_MeteorQuill_Patch
+    {
+        private static void Prefix(BattleManager __instance)
+        {
+            MeteorQuillMod.ResetBattleState(__instance);
         }
     }
 }

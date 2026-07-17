@@ -82,6 +82,7 @@ namespace MiniHealerImprovementMod
                 DroppedLevelName = !string.IsNullOrEmpty(context?.Level?.Key) ? context.Level.Key : "Guardian",
                 PurchaseMaterialFallbackKey = GreaterAlchemyShardFallbackKey,
                 PurchasePrice = StormheartCraftCost,
+                FallbackIcon = CustomArtifactIcons.Load("StormheartCarapace_32.png") ?? controller?.DEFAULT_ITEM_ICON,
                 BaseAttributeTypes = StormheartBaseAttributeTypes,
                 SearchText = "Stormheart Carapace body armor lightning health guardian legendary"
             });

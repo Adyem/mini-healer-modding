@@ -634,6 +634,21 @@ $env:DOTNET_CLI_HOME = (Resolve-Path ..\..\tmp).Path; $env:DOTNET_SKIP_FIRST_TIM
   - the custom item kept cloned template base attributes and appended new ones
   - replace the base attribute list for the custom key instead
 
+### Custom item icons
+
+- Custom item icons are generated raster assets based only on extracted Mini Healer item-icon sprites used as style references. Do not feed unrelated UI, effect, character, or scene assets to image generation.
+- Keep the final in-game icon at `32x32` pixels with nearest-neighbor scaling so it remains readable at the game's native icon size. The current source and final files are under `tmp\MiniHealerImprovementMod\GeneratedIcons\`.
+- Add the final `*_32.png` file to `MiniHealerImprovementMod.csproj` as an embedded resource:
+  - `<EmbeddedResource Include="GeneratedIcons\MyItem_32.png" />`
+- Use `CustomArtifactIcons.Load("MyItem_32.png")` in that item's `CustomArtifactSpec.FallbackIcon`.
+- `CustomArtifactIcons` loads embedded PNG bytes at runtime, creates a Unity `Texture2D` and `Sprite`, caches the result, and uses point filtering. Reuse it instead of loading files from disk or duplicating icon-loader code.
+- `ModHelpers.ConfigureCustomArtifact` deliberately assigns `spec.FallbackIcon` before the cloned artifact's existing `Icon`. This is required because cloned artifacts already have an icon; using `artifact.Icon ?? spec.FallbackIcon` silently keeps the template icon.
+- Always retain a native fallback after the generated icon, for example:
+  - `FallbackIcon = CustomArtifactIcons.Load("MyItem_32.png") ?? controller.LifemenderIcon ?? controller.FaithkeeperIcon`
+  - For items without those controller icons, use `controller?.DEFAULT_ITEM_ICON`.
+- After adding or changing an icon, rebuild with the standard command from `tmp\MiniHealerImprovementMod` and verify the four resource names with reflection or the built DLL before testing in-game.
+- The generated icon assets are not automatically loaded just because they exist in the folder; the `.csproj` embedded-resource entry and `FallbackIcon` assignment are both required.
+
 ### Unity runtime security issue
 
 - This install uses Unity `2018.4.36` on Windows with the Mono runtime.

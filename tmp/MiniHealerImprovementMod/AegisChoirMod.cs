@@ -82,7 +82,7 @@ namespace MiniHealerImprovementMod
                 DroppedLevelName = "BOSS_LOM_NAME",
                 PurchaseMaterialFallbackKey = GreaterAlchemyShardFallbackKey,
                 PurchasePrice = AegisChoirCraftCost,
-                FallbackIcon = controller.LifemenderIcon ?? controller.FaithkeeperIcon,
+                FallbackIcon = CustomArtifactIcons.Load("AegisChoir_32.png") ?? controller.LifemenderIcon ?? controller.FaithkeeperIcon,
                 BaseAttributeTypes = AegisChoirBaseAttributeTypes,
                 SearchText = "Aegis Choir staff healer shield weapon legendary"
             });

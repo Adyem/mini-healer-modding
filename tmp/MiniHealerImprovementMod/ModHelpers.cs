@@ -476,7 +476,9 @@ namespace MiniHealerImprovementMod
             artifact.PurchaseMat = ResolveGreaterAlchemyShardKey() ?? spec.PurchaseMaterialFallbackKey;
             artifact.PurchasePrice = spec.PurchasePrice;
             artifact.specialDesc = string.Empty;
-            artifact.Icon = artifact.Icon ?? spec.FallbackIcon ?? controller?.DEFAULT_ITEM_ICON;
+            // Custom items must override the cloned template icon; otherwise the generated icon
+            // is silently ignored because every cloned artifact already has an Icon assigned.
+            artifact.Icon = spec.FallbackIcon ?? artifact.Icon ?? controller?.DEFAULT_ITEM_ICON;
 
             artifact.possibleMutationAttributes = artifact.possibleMutationAttributes ?? new List<ArtifactAttribute.AttriubteType>();
             artifact.possibleRolledAttributes = artifact.possibleRolledAttributes ?? new List<ArtifactAttribute.AttriubteType>();
